@@ -19,7 +19,7 @@ exports.login = async (req, res) => {
         .json({ message: "Invalid phone or password", user: user });
     }
 
-    const token = jwt.sign({ id: user.id, phone: user.phone }, secretKey, {
+    const token = jwt.sign({ id: user.id, phone: user.phone, type:user.type }, secretKey, {
       expiresIn: "5h",
     });
 
@@ -50,7 +50,7 @@ exports.signup = async (req, res) => {
       type,
     });
 
-    const token = jwt.sign({ id: user.id, phone: user.phone }, secretKey, {
+    const token = jwt.sign({ id: user.id, phone: user.phone , type:user.type }, secretKey, {
       expiresIn: "1h",
     });
 

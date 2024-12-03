@@ -2,9 +2,11 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const authMiddleware = require('./middlewares/authMiddleware');
+const designerMiddleware = require('./middlewares/designerMiddleware');
 
 const authRoutes = require('./routes/authRoutes');
 const playerRoutes = require('./routes/playerRoutes');
+const designerRoutes = require('./routes/designerRoutes');
 
 const app = express();
 
@@ -15,6 +17,7 @@ app.use(bodyParser.json());
 // Routes
 app.use('/api/auth', authRoutes);             
 app.use('/api/player',authMiddleware, playerRoutes);
+app.use('/api/designer',designerMiddleware, designerRoutes);
 
 
 

@@ -1,4 +1,4 @@
-const { where, Op,fn } = require("sequelize");
+const { where, Op, fn } = require("sequelize");
 const sequelize = require("sequelize");
 const { Question, UserAnswer, User, Category } = require("../models");
 
@@ -47,7 +47,7 @@ exports.getPlayersQuestion = async (req, res) => {
     .json({ new_players, nee: new_players[2]?.correct_answers });
 };
 
-exports.getSingleQuqestion = async (req, res) => {
+exports.getSingleQuestion = async (req, res) => {
   let question_id = req.params.question_id;
   let question = await Question.findOne({
     where: { id: question_id },
@@ -80,8 +80,46 @@ exports.getRandomQuestion = async (req, res) => {
       start_time: { [Op.lt]: now },
       end_time: { [Op.gt]: now },
     },
-    order: fn('RAND'),
+    order: fn("RAND"),
   });
 
   return res.status(200).json(question);
+};
+
+exports.getDesignerQuestion = async (req, res) => {
+  let questions = await Question.findAll({
+    include: [
+      { model: Category, as: "category" },
+      {
+        model: User,
+        as: "user",
+        attributes: ["id", "first_name", "last_name"],
+      },
+    ],
+  });
+  return res.status(200).json(questions);
+};
+
+exports.addQuestion = async (req, res) => {
+  const {
+    body,
+    correct_answer_id,
+    duration,
+    start_time,
+    end_time,
+    category_id,
+  } = req.body;
+  if (body && answer_id && duration && start_time && end_time && category_id) {
+    let question = Question.create({
+      body,
+      correct_answer_id,
+      duration,
+      start_time,
+      end_time,
+      category_id,
+      user_id: req.user.id,
+    });
+    return res.status(200).json(question);
+  } else
+    return res.status(400).json({ message: "داده های ورودی معتبر نمی باشد." });
 };

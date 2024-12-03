@@ -5,7 +5,7 @@ const authMiddleware = (req, res, next) => {
   const token = req.headers['authorization']?.split(' ')[1];
 
   if (!token) {
-    return res.status(403).json({ message: 'Access denied. No token provided.' });
+    return res.status(403).json({ message: 'لطفا وارد حساب کاربری خود شوید' });
   }
 
   try {
@@ -13,7 +13,7 @@ const authMiddleware = (req, res, next) => {
     req.user = decoded; // Add user info to request object
     next();
   } catch (err) {
-    return res.status(401).json({ message: 'Invalid token.' });
+    return res.status(401).json({ message: 'توکن نامعتبر' });
   }
 };
 
