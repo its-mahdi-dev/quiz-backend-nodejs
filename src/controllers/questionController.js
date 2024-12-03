@@ -110,7 +110,7 @@ exports.addQuestion = async (req, res) => {
     category_id,
   } = req.body;
   if (body && answer_id && duration && start_time && end_time && category_id) {
-    let question = Question.create({
+    let question = await Question.create({
       body,
       correct_answer_id,
       duration,
