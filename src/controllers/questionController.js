@@ -1,21 +1,27 @@
 const { where, Op, fn } = require("sequelize");
 const sequelize = require("sequelize");
-const { Question, UserAnswer, User, Category } = require("../models");
+const { Question, UserAnswer, User, Category, Answer } = require("../models");
 
 exports.getPlayerQuestions = async (req, res) => {
   let user_answers = await UserAnswer.findAll({
     where: {
       user_id: req.user.id,
     },
-    include: [{ model: Question, as: "question" }],
+    include: [
+      {
+        model: Question,
+        as: "question",
+        attributes: ["category_id", "body", "correct_answer_id", "duration"],
+        include: [
+          { model: Category, as: "category" },
+          { model: Answer, as: "answers" },
+        ],
+      },
+      { model: Answer, as: "answer" },
+    ],
   });
 
-  let questions = [];
-  await user_answers.forEach((answer) => {
-    let question = answer.question;
-    questions.push(question);
-  });
-  return res.status(200).json(questions);
+  return res.status(200).json(user_answers);
 };
 
 exports.getPlayersQuestion = async (req, res) => {
@@ -42,16 +48,17 @@ exports.getPlayersQuestion = async (req, res) => {
     });
   }
 
-  return res
-    .status(200)
-    .json({ new_players, nee: new_players[2]?.correct_answers });
+  return res.status(200).json(new_players);
 };
 
 exports.getSingleQuestion = async (req, res) => {
   let question_id = req.params.question_id;
   let question = await Question.findOne({
     where: { id: question_id },
-    include: [{ model: Category, as: "category" }],
+    include: [
+      { model: Category, as: "category" },
+      { model: Answer, as: "answers" },
+    ],
     attributes: [
       "id",
       "body",
@@ -60,7 +67,9 @@ exports.getSingleQuestion = async (req, res) => {
       "duration",
       "category_id",
     ],
+    order: [[{ model: Answer, as: "answers" }, "order", "ASC"]],
   });
+
   return res.status(200).json(question);
 };
 
@@ -72,8 +81,8 @@ exports.getRandomQuestion = async (req, res) => {
     where: { user_id },
     attributes: ["question_id"],
     raw: true,
-  }).then((records) => records.map((record) => record.questionId));
-
+  }).then((records) => records.map((record) => record.question_id));
+  console.log(answeredQuestionIds, user_id);
   const question = await Question.findOne({
     where: {
       id: { [Op.notIn]: answeredQuestionIds },
@@ -83,7 +92,7 @@ exports.getRandomQuestion = async (req, res) => {
     order: fn("RAND"),
   });
 
-  return res.status(200).json(question);
+  return res.status(200).json(question ? question.id : null);
 };
 
 exports.getDesignerQuestion = async (req, res) => {
@@ -95,7 +104,12 @@ exports.getDesignerQuestion = async (req, res) => {
         as: "user",
         attributes: ["id", "first_name", "last_name"],
       },
+      {
+        model: Answer,
+        as: "answers",
+      },
     ],
+    order: [[{ model: Answer, as: "answers" }, "order", "ASC"]],
   });
   return res.status(200).json(questions);
 };
@@ -103,22 +117,59 @@ exports.getDesignerQuestion = async (req, res) => {
 exports.addQuestion = async (req, res) => {
   const {
     body,
-    correct_answer_id,
+    correct_answer,
     duration,
     start_time,
     end_time,
     category_id,
+    answers,
   } = req.body;
-  if (body && answer_id && duration && start_time && end_time && category_id) {
+  if (
+    body &&
+    correct_answer &&
+    duration &&
+    start_time &&
+    end_time &&
+    category_id &&
+    answers
+  ) {
+    if (answers.length != 4)
+      return res
+        .status(400)
+        .json({ message: "داده های ورودی معتبر نمی باشد." });
     let question = await Question.create({
       body,
-      correct_answer_id,
+      correct_answer_id: 1,
       duration,
       start_time,
       end_time,
       category_id,
       user_id: req.user.id,
     });
+
+    let correctAnswerId = null; // Variable to store the correct answer ID
+
+    // Wait for all answers to be created before updating the question
+    for (const [index, answer_data] of answers.entries()) {
+      const answer = await Answer.create({
+        body: answer_data,
+        question_id: question.id,
+        order: index,
+      });
+
+      // Track the correct answer ID
+      if (index == correct_answer) {
+        correctAnswerId = answer.id;
+      }
+    }
+
+    // Now update the question with the correct answer ID
+    if (correctAnswerId) {
+      await question.update({
+        correct_answer_id: correctAnswerId,
+      });
+    }
+
     return res.status(200).json(question);
   } else
     return res.status(400).json({ message: "داده های ورودی معتبر نمی باشد." });

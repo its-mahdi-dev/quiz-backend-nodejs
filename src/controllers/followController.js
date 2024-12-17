@@ -1,5 +1,5 @@
 const { where } = require("sequelize");
-const Follow = require("../models/Follow");
+const {Follow} = require("../models");
 
 exports.getFollwers = async (req, res) => {
   let user_id = req.body.user_id ? req.body.user_id : req.user.id;

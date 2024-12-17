@@ -6,6 +6,7 @@ const designerMiddleware = require('./middlewares/designerMiddleware');
 
 const authRoutes = require('./routes/authRoutes');
 const playerRoutes = require('./routes/playerRoutes');
+const followRoutes = require('./routes/followRoutes');
 const designerRoutes = require('./routes/designerRoutes');
 
 const app = express();
@@ -17,6 +18,7 @@ app.use(bodyParser.json());
 // Routes
 app.use('/api/auth', authRoutes);             
 app.use('/api/player',authMiddleware, playerRoutes);
+app.use('/api/follow',authMiddleware, followRoutes);
 app.use('/api/designer',designerMiddleware, designerRoutes);
 
 

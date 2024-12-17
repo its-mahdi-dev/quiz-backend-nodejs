@@ -7,7 +7,7 @@ exports.getCategories = async (req, res) => {
 exports.addCategory = async (req, res) => {
   let name = req.body.name;
   Category.create({
-    name,
+    name, 
   });
   return res.status(201).json({"message": "دسته بندی با موفقیت اضافه شد"})
 };
