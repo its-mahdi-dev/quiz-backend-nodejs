@@ -53,6 +53,24 @@ exports.getPlayersQuestion = async (req, res) => {
 
 exports.getSingleQuestion = async (req, res) => {
   let question_id = req.params.question_id;
+  let answer = await UserAnswer.findOne({
+    where: { question_id: question_id, user_id: req.user.id },
+  });
+  if (answer)
+    return res
+      .status(400)
+      .json({ message: "شمما ثبلا به این سوال پاسخ داده اید" });
+
+  let cache_key = "questions:" + req.user.id + ":" + question_id;
+  const redisClient = require("../config/redis");
+  const duration = await redisClient.get(cache_key);
+  if (!duration) {
+    try {
+      await redisClient.set(cache_key, new Date().getTime());
+    } catch (err) {
+      console.error("Error setting key in Redis:", err);
+    }
+  }
   let question = await Question.findOne({
     where: { id: question_id },
     include: [
@@ -70,7 +88,12 @@ exports.getSingleQuestion = async (req, res) => {
     order: [[{ model: Answer, as: "answers" }, "order", "ASC"]],
   });
 
-  return res.status(200).json(question);
+  let new_question = question.toJSON();
+  let new_duration = duration ? (new Date().getTime()) - duration : duration;
+  new_question.duration = new_question.duration - Math.ceil(new_duration / 1000);
+  console.log(new_duration)
+
+  return res.status(200).json(new_question);
 };
 
 exports.getRandomQuestion = async (req, res) => {
