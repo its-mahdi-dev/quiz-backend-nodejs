@@ -3,52 +3,128 @@ const sequelize = require("sequelize");
 const { Question, UserAnswer, User, Category, Answer } = require("../models");
 
 exports.getPlayerQuestions = async (req, res) => {
-  let user_answers = await UserAnswer.findAll({
-    where: {
-      user_id: req.user.id,
-    },
-    include: [
-      {
-        model: Question,
-        as: "question",
-        attributes: ["category_id", "body", "correct_answer_id", "duration"],
-        include: [
-          { model: Category, as: "category" },
-          { model: Answer, as: "answers" },
-        ],
-      },
-      { model: Answer, as: "answer" },
-    ],
-  });
+  try {
+    const { page = 1, limit = 10, search = "" } = req.query;
 
-  return res.status(200).json(user_answers);
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+
+    let user_answers = await UserAnswer.findAndCountAll({
+      where: {
+        user_id: req.user.id,
+      },
+      include: [
+        {
+          model: Question,
+          as: "question",
+          attributes: ["category_id", "body", "correct_answer_id", "duration"],
+          where: search
+            ? {
+                body: {
+                  [Op.like]: `%${search}%`,
+                },
+              }
+            : undefined,
+          include: [
+            {
+              model: Category,
+              as: "category",
+              where: search
+                ? {
+                    name: {
+                      [Op.like]: `%${search}%`,
+                    },
+                  }
+                : undefined,
+            },
+            { model: Answer, as: "answers" },
+          ],
+        },
+        { model: Answer, as: "answer" },
+      ],
+      limit: limitNum,
+      offset: offset,
+    });
+
+    const totalPages = Math.ceil(user_answers.count / limitNum);
+
+    return res.status(200).json({
+      data: user_answers.rows,
+      meta: {
+        currentPage: parseInt(page),
+        totalPages: totalPages,
+        totalItems: user_answers.count,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ message: "Server error" });
+  }
 };
 
 exports.getPlayersQuestion = async (req, res) => {
-  let players = await User.findAll({
-    attributes: ["id", "first_name", "last_name", "score"],
-    where: { type: "player" },
-  });
-  let new_players = players.map((player) => player.toJSON());
-  for (let i = 0; i < new_players.length; i++) {
-    new_players[i].wrong_answers = 0;
-    new_players[i].correct_answers = 0;
+  try {
+    const { page = 1, limit = 10, search = "" } = req.query;
 
-    let user_answers = await UserAnswer.findAll({
-      where: {
-        user_id: new_players[i].id,
-      },
-      include: [{ model: Question, as: "question" }],
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const limitNum = parseInt(limit, 10);
+
+    const whereClause = {
+      type: "player",
+      ...(search && {
+        [Op.or]: [
+          { first_name: { [Op.like]: `%${search}%` } },
+          { last_name: { [Op.like]: `%${search}%` } },
+        ],
+      }),
+    };
+
+    const players = await User.findAndCountAll({
+      attributes: ["id", "first_name", "last_name", "score"],
+      where: whereClause,
+      limit: limitNum,
+      offset: offset,
     });
 
-    user_answers.forEach((ans) => {
-      if (ans.answer_id === ans.question.correct_answer_id)
-        new_players[i].correct_answers++;
-      else new_players[i].wrong_answers++;
+    const new_players = [];
+    for (const player of players.rows) {
+      const playerData = player.toJSON();
+      playerData.wrong_answers = 0;
+      playerData.correct_answers = 0;
+
+      const user_answers = await UserAnswer.findAll({
+        where: { user_id: playerData.id },
+        include: [{ model: Question, as: "question" }],
+      });
+
+      user_answers.forEach((ans) => {
+        if (ans.answer_id === ans.question.correct_answer_id) {
+          playerData.correct_answers++;
+        } else {
+          playerData.wrong_answers++;
+        }
+      });
+
+      new_players.push(playerData);
+    }
+
+    const totalPages = Math.ceil(players.count / limitNum);
+
+    return res.status(200).json({
+      data: new_players,
+      meta: {
+        currentPage: parseInt(page, 10),
+        totalPages: totalPages,
+        totalItems: players.count,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
     });
   }
-
-  return res.status(200).json(new_players);
 };
 
 exports.getSingleQuestion = async (req, res) => {
@@ -89,9 +165,10 @@ exports.getSingleQuestion = async (req, res) => {
   });
 
   let new_question = question.toJSON();
-  let new_duration = duration ? (new Date().getTime()) - duration : duration;
-  new_question.duration = new_question.duration - Math.ceil(new_duration / 1000);
-  console.log(new_duration)
+  let new_duration = duration ? new Date().getTime() - duration : duration;
+  new_question.duration =
+    new_question.duration - Math.ceil(new_duration / 1000);
+  console.log(new_duration);
 
   return res.status(200).json(new_question);
 };
@@ -119,23 +196,56 @@ exports.getRandomQuestion = async (req, res) => {
 };
 
 exports.getDesignerQuestion = async (req, res) => {
-  let questions = await Question.findAll({
-    include: [
-      { model: Category, as: "category" },
-      {
-        model: User,
-        as: "user",
-        attributes: ["id", "first_name", "last_name"],
+  try {
+    const { page = 1, limit = 10, search = "" } = req.query;
+
+    const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const limitNum = parseInt(limit, 10);
+
+    const whereClause = {
+      ...(search && { body: { [Op.like]: `%${search}%` } }),
+    };
+
+    const totalItems = await Question.count({ where: whereClause });
+
+    const questions = await Question.findAll({
+      where: whereClause,
+      include: [
+        { model: Category, as: "category" },
+        {
+          model: User,
+          as: "user",
+          attributes: ["id", "first_name", "last_name"],
+        },
+        {
+          model: Answer,
+          as: "answers",
+        },
+      ],
+      order: [[{ model: Answer, as: "answers" }, "order", "ASC"]],
+      limit: limitNum,
+      offset: offset,
+    });
+
+    const totalPages = Math.ceil(totalItems / limitNum);
+
+    return res.status(200).json({
+      data: questions,
+      meta: {
+        currentPage: parseInt(page, 10),
+        totalPages: totalPages,
+        totalItems: totalItems,
       },
-      {
-        model: Answer,
-        as: "answers",
-      },
-    ],
-    order: [[{ model: Answer, as: "answers" }, "order", "ASC"]],
-  });
-  return res.status(200).json(questions);
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
+  }
 };
+
 
 exports.addQuestion = async (req, res) => {
   const {
@@ -170,9 +280,8 @@ exports.addQuestion = async (req, res) => {
       user_id: req.user.id,
     });
 
-    let correctAnswerId = null; // Variable to store the correct answer ID
+    let correctAnswerId = null;
 
-    // Wait for all answers to be created before updating the question
     for (const [index, answer_data] of answers.entries()) {
       const answer = await Answer.create({
         body: answer_data,
@@ -180,13 +289,11 @@ exports.addQuestion = async (req, res) => {
         order: index,
       });
 
-      // Track the correct answer ID
       if (index == correct_answer) {
         correctAnswerId = answer.id;
       }
     }
 
-    // Now update the question with the correct answer ID
     if (correctAnswerId) {
       await question.update({
         correct_answer_id: correctAnswerId,
